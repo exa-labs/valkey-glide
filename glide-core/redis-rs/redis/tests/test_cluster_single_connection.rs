@@ -26,20 +26,39 @@ async fn client_list(connection: &mut MultiplexedConnection) -> Vec<HashMap<Stri
 /// Count physical sockets rather than names in a map, which would hide duplicates.
 async fn assert_connection_counts(observers: &mut [MultiplexedConnection], single: bool) {
     for observer in observers {
-        let clients = client_list(observer).await;
-        for (name, count) in [
-            (CLIENT_NAME, 1),
-            (MANAGEMENT_CONN_NAME, usize::from(!single)),
-        ] {
-            assert_eq!(
-                clients
-                    .iter()
-                    .filter(|client| client["name"] == name)
-                    .count(),
-                count,
-                "Unexpected connections for {name}: {clients:?}"
-            );
-        }
+        tokio::time::timeout(Duration::from_secs(10), async {
+            let mut tick = tokio::time::interval(Duration::from_millis(20));
+            loop {
+                let clients = client_list(observer).await;
+                let mut complete = true;
+                for (name, expected) in [
+                    (CLIENT_NAME, 1),
+                    (MANAGEMENT_CONN_NAME, usize::from(!single)),
+                ] {
+                    let count = clients
+                        .iter()
+                        .filter(|client| client["name"] == name)
+                        .count();
+                    if single {
+                        assert!(
+                            count <= expected,
+                            "Extra connections for {name}: {clients:?}"
+                        );
+                    }
+                    complete &= count == expected;
+                }
+                if complete {
+                    break;
+                }
+                // After failover, the old primary can disappear from CLUSTER SLOTS
+                // before it is advertised as a replica. Default-mode management
+                // sockets also carry the user name until setup renames them.
+                // Wait for setup, but reject extra sockets immediately in single mode.
+                tick.tick().await;
+            }
+        })
+        .await
+        .expect("Physical connection counts did not converge");
     }
 }
 
@@ -63,7 +82,11 @@ async fn check_connection_mode(single: bool, refresh_from_seeds: bool) {
     // With ordinary topology checks, discover the other five nodes from one seed.
     // Seed-only checks need all addresses to repair every node while idle, since
     // this test deliberately disables the separate user-connection health task.
-    let seeds = if refresh_from_seeds { &cluster.nodes[..] } else { &cluster.nodes[..1] };
+    let seeds = if refresh_from_seeds {
+        &cluster.nodes[..]
+    } else {
+        &cluster.nodes[..1]
+    };
     let builder = redis::cluster::ClusterClient::builder(seeds.to_vec())
         .use_protocol(cluster.protocol)
         .client_name(CLIENT_NAME.into())
@@ -79,7 +102,10 @@ async fn check_connection_mode(single: bool, refresh_from_seeds: bool) {
         builder.periodic_connections_checks(Some(Duration::from_millis(20)))
     };
     let client = builder.build().unwrap();
-    let mut connection = client.get_async_connection(None, None, None, None).await.unwrap();
+    let mut connection = client
+        .get_async_connection(None, None, None, None)
+        .await
+        .unwrap();
     let mut observers = Vec::new();
     for node in &cluster.nodes {
         observers.push(
