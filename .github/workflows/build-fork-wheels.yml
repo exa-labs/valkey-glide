@@ -92,7 +92,6 @@ jobs:
                   CIBW_ENVIRONMENT: >-
                       PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
                       RELEASE_MODE=1 GLIDE_VERSION=2.5.2+exa.1 RUSTUP_TOOLCHAIN=1.95.0
-                      UV_BUILD_CONSTRAINT=/tmp/glide-build-constraints.txt
                   CIBW_BEFORE_BUILD: bash {project}/utils/build-fork-wheel-tools.sh build {project}
                   CIBW_BEFORE_TEST: bash {project}/utils/build-fork-wheel-tools.sh test {project}
                   CIBW_TEST_REQUIRES: redis==6.4.0

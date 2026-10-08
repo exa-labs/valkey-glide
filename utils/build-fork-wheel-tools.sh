@@ -28,7 +28,6 @@ case "$mode" in
             --python_out="$root/python/glide-shared/glide_shared" \
             "$root"/glide-core/src/protobuf/*.proto
         cp "$root/python/README.md" "$root/python/glide-sync/README.md"
-        printf '%s\n' 'setuptools==80.9.0' 'wheel==0.45.1' 'cffi==2.0.0' 'pycparser==2.23' > /tmp/glide-build-constraints.txt
         ;;
     test)
         curl --fail --location --silent --show-error \
