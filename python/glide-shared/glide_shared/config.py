@@ -1434,6 +1434,10 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
         pubsub_reconciliation_interval (Optional[int]): The interval in milliseconds between PubSub subscription
             reconciliation attempts. The reconciliation process ensures that the client's desired subscriptions
             match the actual subscriptions on the server.
+        disable_management_connections (bool): Use one connection per cluster node for both commands
+            and topology checks instead of a separate management connection. Defaults to False.
+            Blocking commands or a busy command connection can delay topology checks and failover
+            detection when enabled. Use a separate client for blocking commands.
     """
 
     def __init__(
@@ -1443,11 +1447,13 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
         refresh_topology_from_initial_nodes: bool = False,
         tcp_nodelay: Optional[bool] = None,
         pubsub_reconciliation_interval: Optional[int] = None,
+        disable_management_connections: bool = False,
     ):
         super().__init__(
             connection_timeout, tls_config, tcp_nodelay, pubsub_reconciliation_interval
         )
         self.refresh_topology_from_initial_nodes = refresh_topology_from_initial_nodes
+        self.disable_management_connections = disable_management_connections
 
     def _create_a_protobuf_conn_request(
         self, request: ConnectionRequest
@@ -1457,6 +1463,7 @@ class AdvancedGlideClusterClientConfiguration(AdvancedBaseClientConfiguration):
         request.refresh_topology_from_initial_nodes = (
             self.refresh_topology_from_initial_nodes
         )
+        request.disable_management_connections = self.disable_management_connections
         return request
 
 

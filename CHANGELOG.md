@@ -2,6 +2,10 @@
 
 ## Pending 2.6
 
+### Features
+
+* Core, Python: Add an opt-in cluster mode that shares command connections with topology checks instead of opening separate management connections ([#4887](https://github.com/valkey-io/valkey-glide/issues/4887)).
+
 ### Fixes
 
 * Node: Log the disconnect warning when the Disconnection push arrives ([#7277](https://github.com/valkey-io/valkey-glide/pull/7277))

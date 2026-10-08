@@ -526,6 +526,29 @@ def test_refresh_topology_from_initial_nodes_in_cluster_config():
     assert request.refresh_topology_from_initial_nodes is True
 
 
+@pytest.mark.parametrize("disabled", [False, True])
+def test_disable_management_connections_in_cluster_config(disabled):
+    config = GlideClusterClientConfiguration(
+        [NodeAddress("127.0.0.1")],
+        advanced_config=AdvancedGlideClusterClientConfiguration(
+            disable_management_connections=disabled
+        ),
+    )
+    request = config._create_a_protobuf_conn_request(cluster_mode=True)
+    assert request.disable_management_connections is disabled
+
+
+@pytest.mark.parametrize(
+    "advanced_config", [None, AdvancedGlideClusterClientConfiguration()]
+)
+def test_management_connections_enabled_by_default(advanced_config):
+    config = GlideClusterClientConfiguration(
+        [NodeAddress("127.0.0.1")], advanced_config=advanced_config
+    )
+    request = config._create_a_protobuf_conn_request(cluster_mode=True)
+    assert request.disable_management_connections is False
+
+
 # Test constants
 TEST_ADDRESSES = [NodeAddress("127.0.0.1")]
 TEST_CERT_DATA_1 = b"-----BEGIN CERTIFICATE-----\nMIIC1...\n-----END CERTIFICATE-----"

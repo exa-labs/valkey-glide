@@ -49,6 +49,7 @@ struct BuilderParams {
     protocol: ProtocolVersion,
     reconnect_retry_strategy: Option<RetryStrategy>,
     refresh_topology_from_initial_nodes: bool,
+    disable_management_connections: bool,
     database_id: i64,
     tcp_nodelay: bool,
     cache: Option<Arc<dyn GlideCache>>,
@@ -157,6 +158,7 @@ pub struct ClusterParams {
     pub(crate) protocol: ProtocolVersion,
     pub(crate) reconnect_retry_strategy: Option<RetryStrategy>,
     pub(crate) refresh_topology_from_initial_nodes: bool,
+    pub(crate) disable_management_connections: bool,
     pub(crate) database_id: i64,
     pub(crate) tcp_nodelay: bool,
     pub(crate) cache: Option<Arc<dyn GlideCache>>,
@@ -202,6 +204,7 @@ impl ClusterParams {
             protocol: value.protocol,
             reconnect_retry_strategy: value.reconnect_retry_strategy,
             refresh_topology_from_initial_nodes: value.refresh_topology_from_initial_nodes,
+            disable_management_connections: value.disable_management_connections,
             database_id: value.database_id,
             tcp_nodelay: value.tcp_nodelay,
             cache: value.cache,
@@ -237,6 +240,7 @@ impl ClusterParams {
             protocol: ProtocolVersion::RESP2,
             reconnect_retry_strategy: None,
             refresh_topology_from_initial_nodes: false,
+            disable_management_connections: false,
             database_id: 0,
             tcp_nodelay: false,
             cache: None,
@@ -364,6 +368,15 @@ impl ClusterClientBuilder {
             initial_nodes: nodes,
             cluster_params,
         })
+    }
+
+    /// Shares user connections for topology and health checks in async cluster connections.
+    ///
+    /// Defaults to false, which opens a separate management connection per node.
+    /// When true, blocking user commands can delay topology and health checks.
+    pub fn disable_management_connections(mut self, disable: bool) -> ClusterClientBuilder {
+        self.builder_params.disable_management_connections = disable;
+        self
     }
 
     /// Sets client name for the new ClusterClient.
@@ -801,6 +814,24 @@ mod tests {
         ClusterClient, ClusterClientBuilder, ConnectionInfo, IntoConnectionInfo, TlsConnParams,
     };
     use crate::tls::{ClientTlsConfig, TlsCertificates};
+
+    #[test]
+    fn test_disable_management_connections() {
+        let default_client = ClusterClient::builder(get_connection_data())
+            .build()
+            .unwrap();
+        assert!(!default_client.cluster_params.disable_management_connections);
+        for disable in [false, true] {
+            let client = ClusterClient::builder(get_connection_data())
+                .disable_management_connections(disable)
+                .build()
+                .unwrap();
+            assert_eq!(
+                client.cluster_params.disable_management_connections,
+                disable
+            );
+        }
+    }
 
     fn get_connection_data() -> Vec<ConnectionInfo> {
         vec![
