@@ -2584,6 +2584,7 @@ async fn create_cluster_client(
 
     let mut builder = redis::cluster::ClusterClientBuilder::new(initial_nodes)
         .connection_timeout(connection_timeout)
+        .disable_management_connections(request.disable_management_connections)
         .retries(DEFAULT_RETRIES);
     let read_from_strategy = request.read_from.unwrap_or_default();
     builder = builder.read_from(match read_from_strategy {
@@ -2836,6 +2837,14 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         .as_ref()
         .map(|client_name| format!("\nClient name: {client_name}"))
         .unwrap_or_default();
+    let management_connections = if request.cluster_mode_enabled {
+        format!(
+            "\nDisable management connections: {}",
+            request.disable_management_connections
+        )
+    } else {
+        String::new()
+    };
     let periodic_checks = if request.cluster_mode_enabled {
         match request.periodic_checks {
             Some(PeriodicCheck::Disabled) => "\nPeriodic Checks: Disabled".to_string(),
@@ -2896,7 +2905,7 @@ fn sanitized_request_string(request: &ConnectionRequest) -> String {
         .unwrap_or_default();
 
     format!(
-        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{pubsub_subscriptions}{inflight_requests_limit}{recovery_requests_queue_size}{node_discovery_mode}{client_cert_paths}{cert_reload}",
+        "\nAddresses: {addresses}{tls_mode}{cluster_mode}{request_timeout}{connection_timeout}{rfr_strategy}{connection_retry_strategy}{database_id}{protocol}{client_name}{periodic_checks}{management_connections}{pubsub_subscriptions}{inflight_requests_limit}{recovery_requests_queue_size}{node_discovery_mode}{client_cert_paths}{cert_reload}",
     )
 }
 

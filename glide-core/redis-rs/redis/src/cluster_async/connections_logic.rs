@@ -282,6 +282,13 @@ pub async fn connect_and_check<C>(
 where
     C: ConnectionLike + Connect + Send + Sync + 'static + Clone,
 {
+    // Topology failures request a management refresh. In shared-connection mode
+    // the failed connection is the user connection, so repair that instead.
+    let conn_type = if params.disable_management_connections {
+        RefreshConnectionType::OnlyUserConnection
+    } else {
+        conn_type
+    };
     match conn_type {
         RefreshConnectionType::OnlyUserConnection => {
             let user_conn = match create_and_setup_user_connection(
@@ -431,10 +438,14 @@ where
     C: ConnectionLike + Send + 'static + Clone,
 {
     let timeout = params.connection_timeout;
-    let (check_mgmt_connection, check_user_connection) = match conn_type {
-        RefreshConnectionType::OnlyUserConnection => (false, true),
-        RefreshConnectionType::OnlyManagementConnection => (true, false),
-        RefreshConnectionType::AllConnections => (true, true),
+    let (check_mgmt_connection, check_user_connection) = if params.disable_management_connections {
+        (false, true)
+    } else {
+        match conn_type {
+            RefreshConnectionType::OnlyUserConnection => (false, true),
+            RefreshConnectionType::OnlyManagementConnection => (true, false),
+            RefreshConnectionType::AllConnections => (true, true),
+        }
     };
     let check = |conn, timeout, conn_type| async move {
         match check_connection(&mut conn.await, timeout).await {

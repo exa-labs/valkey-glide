@@ -149,6 +149,8 @@ message ConnectionRequest {
     optional string client_key_path = 32;
     optional ClientCertReloadConfig cert_reload = 33;
     optional uint32 recovery_requests_queue_size = 34;
+    // Cluster only: use user connections for topology and health checks.
+    bool disable_management_connections = 35;
 }
 
 // Configuration for automatic reloading of the mTLS client certificate and key
