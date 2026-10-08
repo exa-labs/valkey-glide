@@ -174,6 +174,27 @@ test_standalone_client()
 
 ---
 
+## Cluster connection count
+
+By default, a cluster client opens a command connection and a management connection
+to each discovered node, including replicas. To share the command connection with
+topology checks, set the following advanced option (supported by both sync and async clients):
+
+```python
+from glide_sync import AdvancedGlideClusterClientConfiguration, GlideClusterClientConfiguration, NodeAddress
+
+config = GlideClusterClientConfiguration(
+    [NodeAddress("localhost", 6379)],
+    advanced_config=AdvancedGlideClusterClientConfiguration(
+        disable_management_connections=True,
+    ),
+)
+```
+
+This keeps topology checks enabled, but blocking commands or a busy command connection
+can delay topology checks and failover detection. Use a separate client for blocking
+commands. This option does not change standalone clients or which cluster nodes are connected.
+
 ## PubSub Configuration
 
 Valkey GLIDE supports dynamic PubSub with automatic subscription reconciliation. Configure the reconciliation interval to ensure subscriptions remain synchronized:

@@ -39,6 +39,8 @@ pub struct ConnectionRequest {
     pub recovery_requests_queue_size: Option<u32>,
     pub lazy_connect: bool,
     pub refresh_topology_from_initial_nodes: bool,
+    /// Share user connections for cluster topology and health checks. Defaults to false.
+    pub disable_management_connections: bool,
     pub root_certs: Vec<Vec<u8>>,
     pub client_cert: Vec<u8>,
     pub client_key: Vec<u8>,
@@ -452,6 +454,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             recovery_requests_queue_size,
             lazy_connect,
             refresh_topology_from_initial_nodes,
+            disable_management_connections: value.disable_management_connections,
             root_certs,
             client_side_cache,
             client_cert,
@@ -483,6 +486,19 @@ mod tests {
         use crate::compression::CompressionBackendType;
         use crate::connection_request as protobuf;
         use ::protobuf::EnumOrUnknown;
+
+        #[test]
+        fn test_disable_management_connections_conversion() {
+            assert!(!ConnectionRequest::default().disable_management_connections);
+            let request: ConnectionRequest = protobuf::ConnectionRequest::new().into();
+            assert!(!request.disable_management_connections);
+            for disable in [false, true] {
+                let mut proto_request = protobuf::ConnectionRequest::new();
+                proto_request.disable_management_connections = disable;
+                let request: ConnectionRequest = proto_request.into();
+                assert_eq!(request.disable_management_connections, disable);
+            }
+        }
 
         #[test]
         fn test_compression_config_conversion_none() {

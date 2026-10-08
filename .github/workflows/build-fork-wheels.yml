@@ -1,0 +1,115 @@
+name: Build fork wheels
+
+on:
+    push:
+        branches: [feat/single-connection-v2.5.2]
+    pull_request:
+        branches: [release-2.5.2-base]
+        paths:
+            - .github/workflows/build-fork-wheels.yml
+            - python/**
+            - ffi/**
+            - glide-core/**
+            - logger_core/**
+            - utils/build-fork-wheel-tools.sh
+            - utils/fork-wheel-smoke.py
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: fork-wheels-${{ github.head_ref || github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    wheels:
+        if: github.repository == 'exa-labs/valkey-glide'
+        runs-on: ${{ matrix.runner }}
+        timeout-minutes: 90
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - runner: ubuntu-24.04
+                      arch: x86_64
+                      rustup_target: x86_64-unknown-linux-musl
+                      rustup_sha256: e6599a1c7be58a2d8eaca66a80e0dc006d87bbcf780a58b7343d6e14c1605cb2
+                      protoc_platform: linux-x86_64
+                      protoc_sha256: 75d8a9d7a2c42566e46411750d589c51276242d8b6247a5724bac0f9283e05a8
+                      macos_target: ""
+                    - runner: ubuntu-24.04-arm
+                      arch: aarch64
+                      rustup_target: aarch64-unknown-linux-musl
+                      rustup_sha256: a97c8f56d7462908695348dd8c71ea6740c138ce303715793a690503a94fc9a9
+                      protoc_platform: linux-aarch_64
+                      protoc_sha256: 9bf7091569462e8349fe7d7584502b5d2c3bf8f4aafb4fcbdc465895158fd13e
+                      macos_target: ""
+                    - runner: macos-15-intel
+                      arch: x86_64
+                      rustup_target: x86_64-apple-darwin
+                      rustup_sha256: 9c331076f62b4d0edeae63d9d1c9442d5fe39b37b05025ec8d41c5ed35486496
+                      protoc_platform: osx-x86_64
+                      protoc_sha256: 8b35a679c99b36caef5899e596281fe0b943ed248f7d5f70b3e705684bf67cb4
+                      macos_target: "10.13"
+                    - runner: macos-15
+                      arch: arm64
+                      rustup_target: aarch64-apple-darwin
+                      rustup_sha256: 20ef5516c31b1ac2290084199ba77dbbcaa1406c45c1d978ca68558ef5964ef5
+                      protoc_platform: osx-aarch_64
+                      protoc_sha256: dc5ad98c7b1d7ad90475ed333f023946e8fe5bef748cb54dc463069adb3fb5aa
+                      macos_target: "11.0"
+        steps:
+            - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+              with:
+                  persist-credentials: false
+
+            - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+              with:
+                  python-version: "3.12"
+
+            - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+              with:
+                  version: "0.11.21"
+                  enable-cache: false
+
+            - name: Set reproducible wheel timestamp
+              shell: bash
+              run: echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)" >> "$GITHUB_ENV"
+
+            - name: Build and test CPython 3.12 wheels
+              shell: bash
+              run: uvx --python 3.12 --with uv==0.11.21 --from cibuildwheel==4.0.0 cibuildwheel python/glide-sync --output-dir wheelhouse
+              env:
+                  CIBW_BUILD: cp312-*
+                  CIBW_SKIP: "*-musllinux* *i686* *i386*"
+                  CIBW_ARCHS: ${{ matrix.arch }}
+                  CIBW_BUILD_FRONTEND: uv
+                  # Preserve the glibc 2.17 baseline, using cibuildwheel 4.0.0's images.
+                  CIBW_MANYLINUX_X86_64_IMAGE: quay.io/pypa/manylinux2014_x86_64@sha256:5e3012db7af44490157351ba6726fd92e8dba9b421ea819ac7925b4478ad3f17
+                  CIBW_MANYLINUX_AARCH64_IMAGE: quay.io/pypa/manylinux2014_aarch64@sha256:88be65bf6654ffb068b2c07fb321ce1a128ccc092b62bbb79027217dbdec12ae
+                  CIBW_ENVIRONMENT_PASS_LINUX: RUSTUP_TARGET RUSTUP_SHA256 PROTOC_PLATFORM PROTOC_SHA256 SOURCE_DATE_EPOCH
+                  CIBW_ENVIRONMENT: >-
+                      PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
+                      RELEASE_MODE=1 GLIDE_VERSION=2.5.2+exa.1 RUSTUP_TOOLCHAIN=1.95.0
+                      UV_BUILD_CONSTRAINT=/tmp/glide-build-constraints.txt
+                  CIBW_BEFORE_BUILD: bash {project}/utils/build-fork-wheel-tools.sh build {project}
+                  CIBW_BEFORE_TEST: bash {project}/utils/build-fork-wheel-tools.sh test {project}
+                  CIBW_TEST_REQUIRES: redis==6.4.0
+                  # Isolated mode prevents importing the checkout beside the test script.
+                  CIBW_TEST_COMMAND: uv run --no-project python -I {project}/utils/fork-wheel-smoke.py --expected-version 2.5.2+exa.1 --expected-arch ${{ matrix.arch }}
+                  RUSTUP_TARGET: ${{ matrix.rustup_target }}
+                  RUSTUP_SHA256: ${{ matrix.rustup_sha256 }}
+                  PROTOC_PLATFORM: ${{ matrix.protoc_platform }}
+                  PROTOC_SHA256: ${{ matrix.protoc_sha256 }}
+                  MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos_target }}
+
+            - name: Record wheel hashes
+              shell: bash
+              run: shasum -a 256 wheelhouse/*.whl > wheelhouse/SHA256SUMS
+
+            - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+              with:
+                  name: valkey-glide-sync-cp312-${{ matrix.runner }}
+                  path: wheelhouse/
+                  if-no-files-found: error

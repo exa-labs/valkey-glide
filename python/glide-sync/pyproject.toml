@@ -1,5 +1,5 @@
 [project]
-dynamic = ["version"]
+version = "2.5.2+exa.1"
 name = "valkey-glide-sync"
 description = "Valkey GLIDE Sync client. Supports Valkey and Redis OSS."
 readme = "README.md"
